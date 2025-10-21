@@ -61,8 +61,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         "I provide past problems from various prestigious math competitions. "
         "Just use one of the commands below to get a random problem image.\n\n"
         "**Available Commands:**\n"
-        "/rmo   - Regional Mathematics Olympiad(RMO)\n"
-        "/inmo  - INMO\n"
+        "/rmo   - Regional Mathematics Olympiad\n"
+        "/inmo  - Indian National Mathematics Olympiad\n"
     )
     await update.message.reply_text(welcome_message, parse_mode='Markdown')
 
@@ -70,13 +70,17 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 async def send_problem(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """
     A generic handler to send a problem from a specified exam folder.
-    This function powers all the exam-specific commands.
+    This function powers all the exam-specific commands and works in groups.
     """
     log_user(update.message.from_user.id)
 
-    # Determine the exam type from the command (e.g., /rmo -> rmo).
-    command = update.message.text.split(' ')[0] # Handles commands like /rmo@BotUsername
-    exam_type = command.lstrip('/')
+    # --- THIS IS THE CORRECTED PART FOR GROUP CHATS ---
+    # Determine the exam type, correctly handling commands like /inmo@BotUsername
+    command_text = update.message.text.split(' ')[0]      # Gets "/inmo@BotUsername"
+    command_no_slash = command_text.lstrip('/')           # Gets "inmo@BotUsername"
+    exam_type = command_no_slash.split('@')[0]            # Gets "inmo"
+    # --- END OF CORRECTION ---
+
     exam_folder = os.path.join(PROBLEMS_BASE_DIR, exam_type)
 
     try:
@@ -97,7 +101,7 @@ async def send_problem(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         file_path = os.path.join(exam_folder, random_question_file)
 
         await update.message.reply_photo(
-            photo=open(file_path, 'rb'), 
+            photo=open(file_path, 'rb'),
             caption=f"Here is your {exam_type.upper()} problem. Good luck!"
         )
 
@@ -135,7 +139,7 @@ def main() -> None:
     application.add_handler(CommandHandler("start", start))
 
     # A list of all exam commands that will use the same send_problem function.
-    problem_commands = ["rmo", "inmo", "amc8", "amc10", "amc12", "aime", "usamo"]
+    problem_commands = ["rmo", "inmo", "amc8", "amc10", "amc12", "aime", "usamo", "imo"]
     for cmd in problem_commands:
         application.add_handler(CommandHandler(cmd, send_problem))
 
