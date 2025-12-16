@@ -16,27 +16,19 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# Get Token from Vercel Environment Variables
 TELEGRAM_TOKEN = os.getenv('TELEGRAM_TOKEN')
-ADMIN_ID_RAW = os.getenv('ADMIN_ID')
 
-# Validate Env Vars
-if not TELEGRAM_TOKEN or not ADMIN_ID_RAW:
-    logger.critical("Missing env variables!")
-
-try:
-    ADMIN_ID = int(ADMIN_ID_RAW) if ADMIN_ID_RAW else 0
-except ValueError:
-    ADMIN_ID = 0
+# Validation
+if not TELEGRAM_TOKEN:
+    logger.critical("Error: TELEGRAM_TOKEN is missing!")
 
 # --- File System Fix for Vercel ---
-# On Vercel, we must calculate the absolute path to the problems folder
+# This ensures we find the 'problems' folder correctly on Vercel's server
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PROBLEMS_DIR = os.path.join(BASE_DIR, 'problems')
 
-# --- Logic (Removed User Logging for Vercel) ---
-# NOTE: You cannot write to 'users.txt' on Vercel (Read-only filesystem).
-# To track users, you must use a database (MongoDB/Supabase).
-# I have removed the log_user call to prevent errors.
+# --- Bot Logic ---
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     welcome_message = (
@@ -45,6 +37,10 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         "/rmo   - Regional Mathematics Olympiad\n"
         "/inmo  - Indian National Mathematics Olympiad\n"
         "/aime  - American Invitational Mathematics Examination\n"
+        "/amc10 - American Math Comp 10\n"
+        "/amc12 - American Math Comp 12\n"
+        "/usamo - USA Math Olympiad\n"
+        "/imo   - Int. Math Olympiad"
     )
     await update.message.reply_text(welcome_message, parse_mode='Markdown')
 
@@ -52,6 +48,7 @@ async def send_problem(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     if not update.message or not update.message.text: return
     
     try:
+        # Extract exam name from command (e.g., /rmo -> rmo)
         command_text = update.message.text.split(' ')[0]      
         command_no_slash = command_text.lstrip('/')           
         exam_type = command_no_slash.split('@')[0]            
@@ -59,7 +56,7 @@ async def send_problem(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         exam_folder = os.path.join(PROBLEMS_DIR, exam_type)
 
         if not os.path.exists(exam_folder):
-            await update.message.reply_text(f"Setup Error: The folder '{exam_type}' does not exist.")
+            await update.message.reply_text(f"Setup Error: Folder '{exam_type}' not found.")
             return
 
         question_files = [f for f in os.listdir(exam_folder) if not f.startswith('.')]
@@ -80,44 +77,33 @@ async def send_problem(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         logger.error(f"Error sending problem: {e}")
         await update.message.reply_text("An error occurred. Please try again.")
 
-async def user_count(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    # This feature is disabled on Vercel unless you use a Database
-    if update.message.from_user.id == ADMIN_ID:
-        await update.message.reply_text("User counting is disabled on Vercel (Read-only filesystem).")
-
-# --- Initialize Bot Application ---
-# We build the app globally so it can be reused
+# --- Build the Bot ---
+# Initialize one global application instance
 ptb_application = Application.builder().token(TELEGRAM_TOKEN).build()
 
-# Add Handlers
 ptb_application.add_handler(CommandHandler("start", start))
-ptb_application.add_handler(CommandHandler("users", user_count))
 
 problem_commands = ["rmo", "inmo", "amc8", "amc10", "amc12", "aime", "usamo", "imo"]
 for cmd in problem_commands:
     ptb_application.add_handler(CommandHandler(cmd, send_problem))
 
-# --- Flask Routes (The Webhook Logic) ---
+# --- Flask Webhook Route ---
+# This is the entry point Vercel hits when Telegram sends a message
 
 @app.route("/", methods=["GET"])
 def index():
-    return "Bot is running!"
+    return "Bot is running on Vercel!"
 
 @app.route(f"/{TELEGRAM_TOKEN}", methods=["POST"])
 def webhook():
-    """
-    This function receives updates from Telegram and passes them to the bot.
-    """
+    """Recieves the JSON update from Telegram"""
     if request.method == "POST":
-        # Retrieve the JSON update
-        update = Update.de_json(request.get_json(force=True), ptb_application.bot)
+        # Convert JSON -> Telegram Update Object
+        update_json = request.get_json(force=True)
+        update = Update.de_json(update_json, ptb_application.bot)
         
-        # Run the async process_update inside the synchronous Flask route
+        # Process the update with asyncio
         asyncio.run(ptb_application.process_update(update))
         
         return "OK"
-    return "Invalid Method"
-
-# Keep this for local testing only
-if __name__ == '__main__':
-    app.run(port=5000)
+    return "Invalid"
