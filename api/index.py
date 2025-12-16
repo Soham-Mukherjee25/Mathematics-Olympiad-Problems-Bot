@@ -32,10 +32,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         "/rmo   - Regional Mathematics Olympiad\n"
         "/inmo  - Indian National Mathematics Olympiad\n"
         "/aime  - American Invitational Mathematics Examination\n"
-        "/amc10 - American Math Comp 10\n"
-        "/amc12 - American Math Comp 12\n"
-        "/usamo - USA Math Olympiad\n"
-        "/imo   - Int. Math Olympiad"
     )
     await update.message.reply_text(welcome_message, parse_mode='Markdown')
 
